@@ -1,0 +1,66 @@
+=== ACME Corp Internal Security Audit Report ===
+Date: 2026-03-25
+Auditor: security-team@acmecorp.com
+Classification: CONFIDENTIAL
+
+--- Section 1: System Overview ---
+Server: prod-web-01 (192.168.1.100)
+Server: prod-db-01 (10.0.0.55)
+Server: staging-api (172.16.0.12)
+Application: ACME Customer Portal v4.2.1
+Environment: Production
+
+--- Section 2: Access Control Findings ---
+[SAFE] All admin accounts use MFA.
+[SAFE] Role-based access control is properly configured.
+[SAFE] Session timeout is set to 15 minutes.
+
+[FINDING] Hardcoded admin credentials found in deployment script:
+  username=admin_deploy
+  password=Pr0d_D3pl0y!S3cret#2026
+
+[FINDING] Database connection string exposed in application.properties:
+  postgresql://app_user:DbP@ss2026!@prod-db-01:5432/acme_customers
+
+[FINDING] Legacy config contains AWS credentials:
+  AKIA4EXAMPLE1234ABCD
+
+--- Section 3: Data Exposure Audit ---
+[SAFE] Customer data is encrypted at rest with AES-256.
+[SAFE] TLS 1.3 enforced on all endpoints.
+
+[FINDING] Customer PII found in debug log output:
+  Customer SSN: 451-78-9023
+  Contact: john.doe@example.com, Phone: (555) 867-5309
+  Backup contact: jane.smith@acmecorp.com
+
+[FINDING] Payment processing log contains card data:
+  Transaction #TXN-9281: Card 4532-0151-2832-9744 processed successfully
+  Transaction #TXN-9282: Card 5425 2334 6789 0123 declined - insufficient funds
+
+--- Section 4: Application Security ---
+[SAFE] Input validation is applied on all form fields.
+[SAFE] CSRF tokens are properly implemented.
+
+[FINDING] API key exposed in frontend JavaScript bundle:
+  api_key=sk_test_4eC39HqLyjWDarjtT1zdp7dc_xJ29mK4pLqR8nYz
+
+[FINDING] GitHub personal access token found in CI/CD config:
+  ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890
+
+[FINDING] Error response leaking internal paths:
+  Traceback (most recent call last):
+    File "/home/deploy/acme-portal/app/services/payment.py", line 142
+  exception: NullPointerException - payment gateway returned null for customer_id=98231
+
+[FINDING] Debug mode enabled in production:
+  debug=true in /etc/acme/portal.conf
+
+--- Section 5: Recommendations ---
+1. Rotate all exposed credentials immediately
+2. Implement secrets management (HashiCorp Vault)
+3. Add log sanitization pipeline
+4. Disable debug mode in production
+5. Remove hardcoded credentials from codebase
+
+=== END OF REPORT ===

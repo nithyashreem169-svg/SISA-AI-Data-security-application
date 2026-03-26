@@ -20,8 +20,8 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     
-    # CORS
-    CORS_ORIGINS = ["http://localhost:8501", "http://localhost:8000", "*"]
+    # CORS - Allow Streamlit Cloud and local dev
+    CORS_ORIGINS = ["*"]
     
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

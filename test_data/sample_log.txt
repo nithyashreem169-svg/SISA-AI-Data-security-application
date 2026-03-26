@@ -1,0 +1,5 @@
+2026-03-24 10:15:32 INFO User login successful - Email: john.doe@company.com, Token: sk-prod-abc123xyz789
+2026-03-24 10:15:45 ERROR Database connection failed - Password attempt with pwd: MySecurePass#2026, Server: db.internal.company.com
+2026-03-24 10:16:02 WARNING API call made by user@example.com, Credentials: api_key=AIzaSyDmZ1e_xK-N2bC3vQ4rS5tU6wX7yZ8aB, Phone: +1-555-0123
+2026-03-24 10:16:15 DEBUG Stack trace: NullPointerException at UserService.java:45 - Internal error processing session for admin@corp.org
+2026-03-24 10:16:28 CRITICAL Payment processed for customer@payment-portal.io, SSN: 123-45-6789, Card: 4532-1234-5678-9012

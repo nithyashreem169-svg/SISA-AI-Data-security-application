@@ -215,9 +215,10 @@ st.markdown("""
 # ==================== SIDEBAR CONFIGURATION ====================
 with st.sidebar:
     st.markdown("### Configuration")
+    default_backend_url = os.getenv("BACKEND_URL", "http://localhost:8000/api")
     backend_url = st.text_input(
         "Backend URL",
-        value="http://localhost:8000/api",
+        value=default_backend_url,
         help="FastAPI backend endpoint"
     )
     
