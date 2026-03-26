@@ -68,9 +68,10 @@ class RegexPatterns:
     )
     
     # ============ PASSWORD PATTERNS ============
-    # Common password assignments in code/logs
+    # Common password assignments in code/logs (with or without quotes)
+    # Allows 0-2 intervening words between keyword and assignment (e.g. "password found:")
     PASSWORD_PATTERN = re.compile(
-        r'(?:password|passwd|pwd|pass|secret|credentials?)\s*[:=]\s*["\']([^"\';\n]+)["\']',
+        r'(?:password|passwd|pwd|pass|secret|credentials?)(?:\s+\w+){0,2}\s*[:=]\s*["\']?([^\s"\';,}\]]{4,})["\']?',
         re.IGNORECASE
     )
     
@@ -87,21 +88,23 @@ class RegexPatterns:
     )
     
     # ============ STACK TRACES ============
-    # Java/Python/C# stack traces
+    # Java/Python/C# stack traces (precise: requires package-style paths)
     STACK_TRACE_PATTERN = re.compile(
-        r'(?:at|File|line|Exception|Traceback|by:)\s+[\w\.]+.*?(?:\n|$)',
+        r'(?:Traceback|Exception|at\s+[\w]+(?:\.[\w]+){2,}|File\s+"[^"]+",\s+line\s+\d+)',
         re.IGNORECASE
     )
     
     # ============ ERROR MESSAGES ============
+    # Only match lines that actually contain error/exception keywords with details
     ERROR_LEAK_PATTERN = re.compile(
-        r'(?:error|exception|failed|failed to|unable to|traceback|stack trace|debug).*?[:\-].*?(?:\n|$)',
+        r'(?:exception|traceback|stack\s*trace|NullPointer|Segfault|SIGSEGV|panic:|fatal\s+error)\s*[:\-].*?(?:\n|$)',
         re.IGNORECASE
     )
     
     # ============ HARDCODED CREDENTIALS ============
+    # Requires assignment operator (= or :) and a non-trivial value
     HARDCODED_CRED_PATTERN = re.compile(
-        r'(?:username|user|uid|login)\s*[:=]\s*["\']?([^\s"\';]+)["\']?',
+        r'(?:username|user_?name|uid|login_?id)\s*[:=]\s*["\']?([a-zA-Z0-9_.@-]{3,})["\']?',
         re.IGNORECASE
     )
     
@@ -162,7 +165,10 @@ class PatternDetector:
         """Find password assignments"""
         results = []
         for m in RegexPatterns.PASSWORD_PATTERN.finditer(text):
-            results.append((m.group(1), m.start(), m.end()))
+            value = m.group(1)
+            # Skip trivially short or placeholder values
+            if value and len(value) >= 4 and value.lower() not in ('null', 'none', 'true', 'false', 'test'):
+                results.append((value, m.start(), m.end()))
         return results
     
     @staticmethod
@@ -172,12 +178,18 @@ class PatternDetector:
     
     @staticmethod
     def find_db_connections(text: str) -> List[Tuple[str, int, int]]:
-        """Find database connection strings"""
+        """Find database connection strings (excluding pure password assignments)"""
         results = []
         for m in RegexPatterns.DB_CONNECTION_PATTERN.finditer(text):
             results.append((m.group(0), m.start(), m.end()))
-        # Also check for generic connection strings
+        # Only add CONNECTION_STRING_PATTERN matches that look like DB strings
+        # (contain host, port, or protocol indicators — not just passwords)
         for m in RegexPatterns.CONNECTION_STRING_PATTERN.finditer(text):
+            full_match = m.group(0)
+            # Skip if this is just a password/secret assignment (already caught by PASSWORD_PATTERN)
+            keyword = full_match.split('=')[0].split(':')[0].strip().lower() if '=' in full_match or ':' in full_match else ''
+            if keyword in ('password', 'passwd', 'pwd', 'pass', 'secret'):
+                continue  # Skip — caught by PASSWORD_PATTERN
             results.append((m.group(1), m.start(), m.end()))
         return results
     
@@ -221,6 +233,7 @@ class PatternRiskMapper:
         'private_key': SensitivityLevel.CRITICAL,
         'db_connection': SensitivityLevel.HIGH,
         'credential': SensitivityLevel.CRITICAL,
+        'hardcoded_credential': SensitivityLevel.CRITICAL,
         'credit_card': SensitivityLevel.CRITICAL,
         'ssn': SensitivityLevel.CRITICAL,
         'email': SensitivityLevel.LOW,

@@ -269,7 +269,8 @@ class PolicyEngine:
             'pci_dss_compliant': True,
             'gdpr_compliant': True,
             'hipaa_compliant': True,
-            'issues': []
+            'issues': [],
+            'violations': []  # Alias used by frontend
         }
         
         # Check PCI-DSS: No credit card data should be exposed
@@ -289,6 +290,9 @@ class PolicyEngine:
         if any(f.get('risk') == 'critical' for f in findings):
             status['hipaa_compliant'] = False
             status['issues'].append('HIPAA: Critical sensitive data exposed')
+        
+        # Sync violations with issues (frontend reads 'violations')
+        status['violations'] = status['issues']
         
         status['overall_compliant'] = (
             status['pci_dss_compliant'] and 

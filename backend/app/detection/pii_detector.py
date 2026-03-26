@@ -36,7 +36,9 @@ class PIIDetector:
     
     def analyze_line(self, line: str, line_number: int) -> List[Finding]:
         """
-        Analyze a single line for sensitive data
+        Analyze a single line for sensitive data.
+        Includes deduplication: overlapping matches on the same span
+        keep only the highest-severity finding.
         
         Args:
             line: The line content to analyze
@@ -45,7 +47,10 @@ class PIIDetector:
         Returns:
             List of findings in this line
         """
-        line_findings = []
+        raw_findings = []
+        
+        # Severity ordering for dedup (higher index = more severe)
+        severity_order = {'low': 0, 'medium': 1, 'high': 2, 'critical': 3}
         
         # Run all detection methods
         for pattern_type, (detector_method, risk_level) in DETECTION_METHODS.items():
@@ -60,19 +65,36 @@ class PIIDetector:
                         line_content=line,
                         start_pos=start_pos,
                         end_pos=end_pos,
-                        detected_value=match_value,  # Keep actual value for highlighting
+                        detected_value=match_value,
                         confidence=1.0
                     )
-                    line_findings.append(finding)
-                    
-                    # Track pattern counts
-                    self.pattern_counts[pattern_type] = self.pattern_counts.get(pattern_type, 0) + 1
-                    
-                    logger.info(f"Line {line_number}: Found {pattern_type} ({risk_level.value})")
+                    raw_findings.append(finding)
                     
             except Exception as e:
                 logger.error(f"Error detecting {pattern_type}: {str(e)}")
                 continue
+        
+        # Deduplicate: if two findings overlap on the same text span,
+        # keep only the one with the higher severity
+        line_findings = []
+        seen_spans = {}  # key: (start_pos, end_pos) -> best finding
+        
+        for finding in raw_findings:
+            span_key = (finding.start_pos, finding.end_pos)
+            existing = seen_spans.get(span_key)
+            
+            if existing is None:
+                seen_spans[span_key] = finding
+            else:
+                # Keep the higher-severity finding
+                if severity_order.get(finding.risk, 0) > severity_order.get(existing.risk, 0):
+                    seen_spans[span_key] = finding
+        
+        for finding in seen_spans.values():
+            line_findings.append(finding)
+            # Track pattern counts
+            self.pattern_counts[finding.type] = self.pattern_counts.get(finding.type, 0) + 1
+            logger.info(f"Line {line_number}: Found {finding.type} ({finding.risk})")
         
         return line_findings
     

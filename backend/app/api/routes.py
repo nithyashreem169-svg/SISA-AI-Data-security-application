@@ -102,10 +102,20 @@ async def analyze_file(
         
         logger.info(f"Pattern detection complete: {len(findings_dicts)} findings")
         
+        # Run LogAnalyzer for log-specific suspicious patterns
+        log_analyzer.reset()
+        log_analysis = log_analyzer.analyze_logs(lines)
+        suspicious_patterns = log_analysis.get('suspicious_patterns', [])
+        log_insights = log_analysis.get('insights', [])
+        
+        if suspicious_patterns:
+            logger.info(f"LogAnalyzer found {len(suspicious_patterns)} suspicious patterns")
+        
         response = {
             "status": "success",
             "filename": filename,
             "lines_analyzed": len(lines),
+            "content": lines,  # Pass lines through for AI analysis stage
             "total_findings": len(findings_dicts),
             "findings_by_risk": {
                 'critical': len([f for f in findings_dicts if f['risk'] == 'critical']),
@@ -114,7 +124,9 @@ async def analyze_file(
                 'low': len([f for f in findings_dicts if f['risk'] == 'low'])
             },
             "findings": findings_dicts,
-            "pattern_summary": pii_detector.get_summary()
+            "pattern_summary": pii_detector.get_summary(),
+            "suspicious_patterns": suspicious_patterns,
+            "log_insights": log_insights
         }
         
         # Optional: Apply policies

@@ -8,11 +8,18 @@ import requests
 import json
 from datetime import datetime
 import html
+import logging
+import os
+from io import BytesIO
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(
     page_title="SISA AI Security Platform",
-    page_icon="🛡️",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -224,6 +231,28 @@ with st.sidebar:
     
     st.divider()
     
+    st.markdown("### Test Files")
+    test_file_option = st.radio(
+        "Select mode:",
+        ["Upload Custom File", "Use Test Data"],
+        help="Choose between uploading your own file or using predefined test data"
+    )
+    
+    test_file_selection = None
+    if test_file_option == "Use Test Data":
+        test_file_selection = st.selectbox(
+            "Choose test file:",
+            [
+                "Sample Log TXT",
+                "Server Events (.log)",
+                "Audit Log (.doc)",
+                "Compliance Report (.docx)"
+            ],
+            help="Sample test files with unbalanced safe/unsafe elements for analysis testing"
+        )
+    
+    st.divider()
+    
     st.markdown("### About")
     st.info(
         "**SISA Platform**\n\n"
@@ -248,17 +277,62 @@ st.markdown("## Upload & Analyze")
 
 col1, col2 = st.columns([3, 1])
 
-with col1:
-    uploaded_file = st.file_uploader(
-        "Choose a security log file",
-        type=["txt", "log", "doc", "docx"],
-        help="Upload TXT, LOG, DOC, or DOCX files for analysis"
-    )
+uploaded_file = None
 
-with col2:
-    if uploaded_file:
-        file_size_mb = uploaded_file.size / (1024 * 1024)
-        st.metric("File Size", f"{file_size_mb:.2f} MB")
+# Load test file if selected
+if test_file_option == "Use Test Data":
+    st.info(f"Using test file: {test_file_selection}")
+    test_file_path = None
+    test_file_name = None
+    
+    # Resolve paths relative to project root (one level up from frontend/)
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    
+    if test_file_selection == "Sample Log TXT":
+        test_file_path = os.path.join(project_root, "test_data", "sample_log.txt")
+        test_file_name = "sample_log.txt"
+    elif test_file_selection == "Server Events (.log)":
+        test_file_path = os.path.join(project_root, "test_data", "server_events.log")
+        test_file_name = "server_events.log"
+    elif test_file_selection == "Audit Log (.doc)":
+        test_file_path = os.path.join(project_root, "test_data", "audit_log.doc")
+        test_file_name = "audit_log.doc"
+    elif test_file_selection == "Compliance Report (.docx)":
+        test_file_path = os.path.join(project_root, "test_data", "compliance_report.docx")
+        test_file_name = "compliance_report.docx"
+    
+    if test_file_path and os.path.exists(test_file_path):
+        with open(test_file_path, 'rb') as f:
+            file_content = f.read()
+        
+        # Create a file-like object
+        from io import BytesIO
+        uploaded_file = BytesIO(file_content)
+        uploaded_file.name = test_file_name
+        uploaded_file.size = len(file_content)
+        uploaded_file.type = "application/octet-stream" if test_file_name.endswith('.docx') else "text/plain"
+        
+        with col1:
+            st.success(f"Loaded: {test_file_name}")
+        with col2:
+            file_size_mb = len(file_content) / (1024 * 1024)
+            st.metric("File Size", f"{file_size_mb:.2f} MB")
+        
+        st.info("Test file loaded. Click 'Start Analysis' below to scan for security threats.")
+    else:
+        st.error(f"Test file not found at: {test_file_path}")
+else:
+    with col1:
+        uploaded_file = st.file_uploader(
+            "Choose a security log file",
+            type=["txt", "log", "doc", "docx"],
+            help="Upload TXT, LOG, DOC, or DOCX files for analysis"
+        )
+    
+    with col2:
+        if uploaded_file:
+            file_size_mb = uploaded_file.size / (1024 * 1024)
+            st.metric("File Size", f"{file_size_mb:.2f} MB")
 
 
 # ==================== ANALYSIS FLOW ====================
@@ -296,13 +370,15 @@ if uploaded_file:
                 "filename": upload_data.get("filename", "")
             }
             
+            analyze_params = {
+                "include_policy": enable_policy,
+                "include_risk": enable_risk
+            }
+            
             analyze_response = requests.post(
                 f"{backend_url}/analyze",
                 json=analyze_payload,
-                params={
-                    "include_policy": enable_policy,
-                    "include_risk": enable_risk
-                },
+                params=analyze_params,
                 timeout=60
             )
             
@@ -316,6 +392,13 @@ if uploaded_file:
             analysis_placeholder.empty()
             
             result_data = analyze_response.json()
+            
+            # If PII detection is disabled, clear findings
+            if not enable_pii:
+                result_data['findings'] = []
+                result_data['total_findings'] = 0
+                result_data['findings_by_risk'] = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+            
             findings = result_data.get('findings', [])
             total_findings = result_data.get('total_findings', 0)
             findings_by_risk = result_data.get('findings_by_risk', {})
@@ -332,6 +415,7 @@ if uploaded_file:
                         risk_score = result_data['risk_assessment'].get('risk_score', 0)
                     
                     ai_payload = {
+                        "lines": result_data.get("content", []),
                         "findings": findings,
                         "filename": upload_data.get("filename", ""),
                         "risk_score": risk_score
@@ -443,6 +527,32 @@ if uploaded_file:
                                 <span style='font-size: 1.8em; color: #667eea;'>{count}</span> detected
                             </div>
                             """, unsafe_allow_html=True)
+                
+                # Suspicious patterns from LogAnalyzer
+                suspicious = result_data.get('suspicious_patterns', [])
+                if suspicious:
+                    st.divider()
+                    st.markdown("### Suspicious Patterns Detected")
+                    for sp in suspicious:
+                        sp_type = sp.get('type', 'unknown')
+                        sp_severity = sp.get('severity', 'medium')
+                        sp_desc = sp.get('description', '')
+                        severity_color = {'low': '#28a745', 'medium': '#ffc107', 'high': '#fd7e14', 'critical': '#dc3545'}.get(sp_severity, '#ffc107')
+                        st.markdown(f"""
+                        <div class='metric-card' style='border-left-color: {severity_color};'>
+                            <strong>{sp_type.replace('_', ' ').upper()}</strong>
+                            <span style='float: right; color: {severity_color}; font-weight: bold;'>{sp_severity.upper()}</span>
+                            <br><span style='color: #555;'>{sp_desc}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Log-level insights from LogAnalyzer
+                log_insights = result_data.get('log_insights', [])
+                if log_insights:
+                    st.divider()
+                    st.markdown("### Log Analysis Insights")
+                    for insight in log_insights:
+                        st.markdown(f"• {insight}")
             
             # ==================== TAB 2: PII EVIDENCE (NEW) ====================
             with tab2:
@@ -486,25 +596,24 @@ if uploaded_file:
                             st.write(f"**Confidence:** {confidence}%")
                         
                         # Evidence line from original content
-                        if line_number != 'N/A' and line_number < len(upload_data.get('lines', [])):
+                        if line_number != 'N/A' and isinstance(line_number, int) and line_number <= len(upload_data.get('lines', [])):
                             evidence_line = upload_data.get('lines', [])[line_number - 1]
                             
-                            # Use backend-detected position to highlight
-                            # The backend provides exact detected_value + start_pos + end_pos
+                            # Build highlighted evidence safely
                             try:
-                                # Get the exact matched text from backend
                                 matched_text = detected_value
                                 
-                                # Create highlighted version by replacing the exact matched text
-                                # Use case-sensitive replacement once
-                                highlighted_evidence = evidence_line.replace(
-                                    matched_text,
-                                    f'<mark style="background-color: #ffeb3b; font-weight: bold; padding: 2px 4px; border-radius: 3px;">{html.escape(matched_text)}</mark>',
-                                    1  # Replace only first occurrence
-                                )
-                                
+                                # Find the match position and build escaped HTML
+                                match_idx = evidence_line.find(matched_text)
+                                if match_idx >= 0:
+                                    before = html.escape(evidence_line[:match_idx])
+                                    match_html = f'<mark style="background-color: #ffeb3b; font-weight: bold; padding: 2px 4px; border-radius: 3px;">{html.escape(matched_text)}</mark>'
+                                    after = html.escape(evidence_line[match_idx + len(matched_text):])
+                                    highlighted_evidence = before + match_html + after
+                                else:
+                                    highlighted_evidence = html.escape(evidence_line)
                             except Exception as e:
-                                highlighted_evidence = evidence_line
+                                highlighted_evidence = html.escape(evidence_line)
                             
                             safe_line = html.escape(evidence_line)
                             
@@ -736,7 +845,7 @@ if uploaded_file:
                             st.markdown(f"**{idx}.** {action}")
                     
                     if ai_analysis and ai_analysis.get('recommended_actions'):
-                        st.info("💡 For more detailed AI-powered insights and remediation steps, see the 'AI Insights' tab.")
+                        st.info("For more detailed AI-powered insights and remediation steps, see the 'AI Insights' tab.")
                 else:
                     st.info("Risk assessment not enabled")
             
@@ -747,77 +856,115 @@ if uploaded_file:
                 if not ai_analysis:
                     st.info("AI analysis not enabled or no findings detected. Enable AI Analysis in the sidebar to get insights.")
                 else:
-                    # Log Summary
-                    if 'log_summary' in ai_analysis:
+                    try:
+                        # ===== LOG SUMMARY (BEAUTIFIED) =====
                         st.markdown("#### Log Summary")
-                        st.info(ai_analysis['log_summary'])
-                    
-                    st.divider()
-                    
-                    # Security Insights
-                    if 'insights' in ai_analysis:
-                        st.markdown("#### Security Insights (From AI Analysis)")
-                        insights_list = ai_analysis['insights']
-                        if isinstance(insights_list, str):
-                            insights_list = insights_list.split('\n')
-                        
-                        if insights_list:
-                            for idx, insight in enumerate(filter(None, insights_list), 1):
-                                try:
-                                    insight_text = str(insight).strip() if hasattr(insight, 'strip') else str(insight)
-                                    if insight_text:
-                                        st.markdown(f"**{idx}.** {insight_text}")
-                                except Exception as e:
-                                    logger.error(f"Error displaying insight: {e}")
+                        if ai_analysis.get('log_summary'):
+                            summary_text = str(ai_analysis['log_summary']).strip()
+                            if summary_text:
+                                # Create a nicely formatted summary box
+                                st.markdown(f"""
+                                <div style='background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%); padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;'>
+                                    <p style='margin: 0; line-height: 1.6; color: #333;'>{html.escape(summary_text)}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.info("No log summary generated")
                         else:
-                            st.info("No detailed insights available")
-                    
-                    st.divider()
-                    
-                    # Pattern Correlation
-                    if 'correlation' in ai_analysis:
-                        st.markdown("#### Pattern Correlation Analysis")
-                        st.success(ai_analysis['correlation'])
-                    
-                    st.divider()
-                    
-                    # AI-Recommended Actions (NEW)
-                    if 'recommended_actions' in ai_analysis:
-                        st.markdown("#### Recommended Actions (AI-Generated)")
-                        recommended_actions = ai_analysis['recommended_actions']
-                        if isinstance(recommended_actions, str):
-                            recommended_actions = recommended_actions.split('\n')
+                            st.info("No log summary available")
                         
-                        if recommended_actions:
-                            for idx, action in enumerate(filter(None, recommended_actions), 1):
-                                try:
-                                    action_text = str(action).strip() if hasattr(action, 'strip') else str(action)
-                                    if action_text:
-                                        st.markdown(f"**{idx}.** {action_text}")
-                                except Exception as e:
-                                    logger.error(f"Error displaying action: {e}")
+                        st.divider()
+                        
+                        # ===== PATTERN CORRELATION =====
+                        st.markdown("#### Pattern Correlation Analysis")
+                        if ai_analysis.get('correlation'):
+                            correlation_text = str(ai_analysis['correlation']).strip()
+                            if correlation_text:
+                                st.markdown(f"""
+                                <div style='background: #10b98120; padding: 15px; border-radius: 8px; border-left: 4px solid #10b981;'>
+                                    <p style='margin: 0; line-height: 1.6; color: #333;'>{correlation_text}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.info("No pattern correlations detected")
+                        else:
+                            st.info("No pattern correlation data available")
+                        
+                        st.divider()
+                        
+                        # ===== RECOMMENDED ACTIONS =====
+                        st.markdown("#### Recommended Actions (AI-Generated)")
+                        if ai_analysis.get('recommended_actions'):
+                            recommended_actions = ai_analysis['recommended_actions']
+                            if isinstance(recommended_actions, str):
+                                recommended_actions = recommended_actions.split('\n')
+                            
+                            action_items = [item for item in recommended_actions if item and str(item).strip()]
+                            if action_items:
+                                for idx, action in enumerate(action_items, 1):
+                                    try:
+                                        action_text = str(action).strip()
+                                        if action_text:
+                                            st.markdown(f"**{idx}.** {action_text}")
+                                    except Exception as e:
+                                        logger.error(f"Error displaying action: {e}")
+                            else:
+                                st.info("No recommended actions available")
                         else:
                             st.info("No recommended actions available")
-                    
-                    st.divider()
-                    
-                    # Remediation Steps
-                    if 'remediation' in ai_analysis:
-                        st.markdown("#### Remediation Steps (For Critical Issues)")
-                        remediation_list = ai_analysis['remediation']
                         
-                        if isinstance(remediation_list, list):
-                            for remediation_item in remediation_list:
-                                if isinstance(remediation_item, dict):
-                                    finding_type = remediation_item.get('finding_type', 'Unknown')
-                                    risk_level = remediation_item.get('risk_level', 'unknown')
-                                    steps = remediation_item.get('steps', '')
-                                    
-                                    st.markdown(f"**Issue: {finding_type.upper()}** ({risk_level})")
-                                    st.info(steps)
-                                    st.divider()
+                        st.divider()
+                        
+                        # ===== REMEDIATION STEPS =====
+                        st.markdown("#### Remediation Steps (For Critical Issues)")
+                        if ai_analysis.get('remediation'):
+                            remediation_list = ai_analysis['remediation']
+                            
+                            if isinstance(remediation_list, list):
+                                remediation_items = [r for r in remediation_list if r]
+                                if remediation_items:
+                                    for remediation_item in remediation_items:
+                                        try:
+                                            if isinstance(remediation_item, dict):
+                                                finding_type = remediation_item.get('finding_type', 'Unknown')
+                                                risk_level = remediation_item.get('risk_level', 'unknown').upper()
+                                                steps = remediation_item.get('steps', '')
+                                                
+                                                # Color code by risk level
+                                                risk_color = {
+                                                    'CRITICAL': '#dc3545',
+                                                    'HIGH': '#fd7e14',
+                                                    'MEDIUM': '#ffc107',
+                                                    'LOW': '#28a745'
+                                                }.get(risk_level, '#6c757d')
+                                                
+                                                st.markdown(f"""
+                                                <div style='background: {risk_color}20; padding: 12px; border-radius: 6px; border-left: 4px solid {risk_color}; margin-bottom: 10px;'>
+                                                    <strong style='color: {risk_color};'>Issue: {finding_type.upper()}</strong> <span style='color: #666;'>({risk_level})</span>
+                                                </div>
+                                                """, unsafe_allow_html=True)
+                                                
+                                                if isinstance(steps, list):
+                                                    for step_idx, step in enumerate(steps, 1):
+                                                        st.markdown(f"• **Step {step_idx}:** {str(step).strip()}")
+                                                elif isinstance(steps, str) and steps:
+                                                    st.markdown(f"**Steps:** {steps}")
+                                                else:
+                                                    st.markdown("No remediation steps provided")
+                                                
+                                                st.divider()
+                                        except Exception as e:
+                                            logger.error(f"Error displaying remediation: {e}")
+                                else:
+                                    st.info("No remediation steps available")
+                            else:
+                                st.info("No remediation data available")
                         else:
                             st.info("No remediation steps available")
+                    
+                    except Exception as e:
+                        logger.error(f"Error in AI Insights tab: {e}")
+                        st.error(f"Error displaying AI insights: {str(e)}")
             
             # ==================== TAB 6: FULL REPORT ====================
             with tab6:

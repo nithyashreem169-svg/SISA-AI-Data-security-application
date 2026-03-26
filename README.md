@@ -20,7 +20,7 @@ A comprehensive security platform for detecting and analyzing sensitive data in 
 - **Security Policy Engine**: 6+ built-in policies (data masking, encryption requirements, etc.)
 - **Professional Dashboard**: 6-tab UI with color-coded risk levels and detailed reports
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 SISA_AI_Security_Platform/
@@ -40,7 +40,7 @@ SISA_AI_Security_Platform/
 └── test_data/           # Test files
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Backend Setup
 
@@ -85,7 +85,7 @@ SISA_AI_Security_Platform/
    ```
    Frontend runs at: `http://localhost:8501`
 
-## 📋 Step 1: Input Processing
+## Step 1: Input Processing
 
 - Upload TXT or LOG files (max 100MB)
 - Backend validates file format and size
@@ -101,7 +101,7 @@ Use `test_data/sample_log.txt` which contains PII data:
 - Phone numbers
 - SSN/Card numbers
 
-## 🔗 API Endpoints
+## API Endpoints
 
 ### POST /api/analyze - **STAGE 1: Detection & Analysis**
 Upload file and get PII detected with risk scoring and policy violations
@@ -199,7 +199,7 @@ Health check endpoint
 - **AI**: Groq API
 - **Language**: Python 3.9+
 
-## 📝 Environment Variables
+## Environment Variables
 
 - `GROQ_API_KEY`: Your Groq API key (https://console.groq.com)
 - `GROQ_MODEL`: LLM model (default: `llama-3.3-70b-versatile`)
@@ -246,7 +246,7 @@ The `test_data/sample_log.txt` file contains:
 - Social security numbers
 - User credentials
 
-## 🔐 Security Considerations
+## Security Considerations
 
 - **No Data Persistence**: Analysis results are not saved unless explicitly exported
 - **Local Processing**: All data processed locally (with AI via Groq API)
@@ -254,7 +254,7 @@ The `test_data/sample_log.txt` file contains:
 - **Input Validation**: All uploads validated for file type and size
 - **Error Masking**: Sensitive details not exposed in error messages
 
-## 🎓 Implementation Status
+## Implementation Status
 
 ✅ **Backend Design (18 marks)** - FastAPI with 3-stage pipeline, proper error handling, logging
 ✅ **AI Integration (15 marks)** - Groq LLaMA 3.3 (70B) with dynamic prompting, 4 AI methods
@@ -269,7 +269,7 @@ The `test_data/sample_log.txt` file contains:
 
 ---
 
-## 📊 Dashboard Overview
+## Dashboard Overview
 
 ### Tab 1: Dashboard
 - Real-time file analysis status
