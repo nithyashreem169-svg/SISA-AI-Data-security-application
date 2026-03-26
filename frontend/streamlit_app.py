@@ -244,7 +244,7 @@ with st.sidebar:
         test_file_selection = st.selectbox(
             "Choose test file:",
             [
-                "Sample Log TXT",
+                "Sample Log (.log)",
                 "Security Audit Report (.txt)",
                 "Audit Log (.doc)",
                 "Compliance Report (.docx)"
@@ -289,9 +289,9 @@ if test_file_option == "Use Test Data":
     # Resolve paths relative to project root (one level up from frontend/)
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     
-    if test_file_selection == "Sample Log TXT":
-        test_file_path = os.path.join(project_root, "test_data", "sample_log.txt")
-        test_file_name = "sample_log.txt"
+    if test_file_selection == "Sample Log (.log)":
+        test_file_path = os.path.join(project_root, "test_data", "sample_log.log")
+        test_file_name = "sample_log.log"
     elif test_file_selection == "Security Audit Report (.txt)":
         test_file_path = os.path.join(project_root, "test_data", "security_audit_report.txt")
         test_file_name = "security_audit_report.txt"
