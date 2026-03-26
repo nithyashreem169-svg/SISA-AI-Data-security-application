@@ -245,7 +245,7 @@ with st.sidebar:
             "Choose test file:",
             [
                 "Sample Log TXT",
-                "Server Events (.log)",
+                "Security Audit Report (.txt)",
                 "Audit Log (.doc)",
                 "Compliance Report (.docx)"
             ],
@@ -292,9 +292,9 @@ if test_file_option == "Use Test Data":
     if test_file_selection == "Sample Log TXT":
         test_file_path = os.path.join(project_root, "test_data", "sample_log.txt")
         test_file_name = "sample_log.txt"
-    elif test_file_selection == "Server Events (.log)":
-        test_file_path = os.path.join(project_root, "test_data", "server_events.log")
-        test_file_name = "server_events.log"
+    elif test_file_selection == "Security Audit Report (.txt)":
+        test_file_path = os.path.join(project_root, "test_data", "security_audit_report.txt")
+        test_file_name = "security_audit_report.txt"
     elif test_file_selection == "Audit Log (.doc)":
         test_file_path = os.path.join(project_root, "test_data", "audit_log.doc")
         test_file_name = "audit_log.doc"
